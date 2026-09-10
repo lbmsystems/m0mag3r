@@ -64,13 +64,20 @@ function writeRetryQueue(queue) {
 }
 
 async function postIntake(payload) {
-  // text/plain keeps this a CORS "simple request" so no preflight is needed;
-  // the receiving end parses the body as JSON regardless of declared type.
-  const opts = {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=UTF-8" },
-    body: JSON.stringify(payload),
-  };
+  // The endpoint accepts only application/json or
+  // application/x-www-form-urlencoded. Of those, only form encoding is on the
+  // CORS safelist, so it is the one a browser can send cross-origin without a
+  // preflight - and the endpoint answers a preflight with nothing, so a
+  // preflighted request never arrives at all. Passing URLSearchParams as the
+  // body sets that content type automatically; setting it by hand would be
+  // stripped under no-cors.
+  const body = new URLSearchParams();
+  Object.keys(payload).forEach(function (k) {
+    const v = payload[k];
+    body.append(k, v === null || v === undefined ? "" : String(v));
+  });
+
+  const opts = { method: "POST", body: body };
   if (INTAKE_OPAQUE) opts.mode = "no-cors";
 
   const res = await fetch(INTAKE_ENDPOINT, opts);
