@@ -4,8 +4,15 @@ const { useState, useEffect, useRef, useMemo } = React;
 /* ============= INTAKE SUBMISSION ============= */
 
 // Single point of configuration. Swapping transports (Airtable webhook ->
-// Zapier catch hook -> Cloudflare Worker) is a one-line change here.
+// Zapier catch hook -> Cloudflare Worker) is a two-line change here.
 const INTAKE_ENDPOINT = "https://hooks.airtable.com/workflows/v1/genericWebhook/appYE8hEfQpGoQw1g/wflcIHEDo24Z7aRuq/wtrnH7kUuVyGY6xEc";
+
+// The Airtable webhook sends no CORS headers. Without no-cors the browser
+// still DELIVERS the POST but reports it to us as a failure, which would
+// re-queue an already-created record and duplicate it on every page load.
+// Set this false when moving to a transport that does send CORS headers, to
+// get real delivery confirmation back.
+const INTAKE_OPAQUE = true;
 
 // Path id -> the values written to Airtable. `supportType` is load-bearing:
 // the welcome-email automation keys off it, so no path may leave it blank.
@@ -59,12 +66,22 @@ function writeRetryQueue(queue) {
 async function postIntake(payload) {
   // text/plain keeps this a CORS "simple request" so no preflight is needed;
   // the receiving end parses the body as JSON regardless of declared type.
-  const res = await fetch(INTAKE_ENDPOINT, {
+  const opts = {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error("intake endpoint returned " + res.status);
+  };
+  if (INTAKE_OPAQUE) opts.mode = "no-cors";
+
+  const res = await fetch(INTAKE_ENDPOINT, opts);
+
+  // An opaque response reports status 0 / ok false even when the POST
+  // succeeded, so the only meaningful signal is that fetch resolved at all.
+  // A rejection means the request never left the device - which is exactly
+  // the case the retry queue exists for.
+  if (res.type !== "opaque" && !res.ok) {
+    throw new Error("intake endpoint returned " + res.status);
+  }
   return res;
 }
 

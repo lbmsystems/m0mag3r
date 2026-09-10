@@ -28,11 +28,29 @@ place at the top of `src/app.jsx`:
 
 ```js
 const INTAKE_ENDPOINT = "https://hooks.airtable.com/workflows/v1/genericWebhook/...";
+const INTAKE_OPAQUE  = true;
 ```
 
-Swapping transports (Zapier catch hook, Cloudflare Worker proxy) is a one-line
+Swapping transports (Zapier catch hook, Cloudflare Worker proxy) is a two-line
 change there. No Airtable token is used or stored client-side — the webhook URL
 is write-only into the automation.
+
+### Why `INTAKE_OPAQUE`
+
+Airtable's webhook endpoint sends no CORS headers. A normal cross-origin
+`fetch` to it still **delivers** the POST — the browser only refuses to let
+JavaScript read the reply, surfacing as `TypeError: Failed to fetch`.
+
+Treating that as a failure is actively harmful here: the retry queue would
+re-send a record that was already created, duplicating it on every subsequent
+page load, forever. `mode: "no-cors"` makes the request resolve instead, so a
+rejection once again means only one thing — the request never left the device,
+which is the case the queue exists for.
+
+The trade-off is that server-side errors are invisible; an opaque response
+reports `status 0` whether the endpoint returned 200 or 500. If delivery
+confirmation is needed, move to a transport that sends CORS headers (Zapier
+catch hook or a Cloudflare Worker) and set `INTAKE_OPAQUE = false`.
 
 Submissions land in the `Intake` table of the `Leads` base
 (`appYE8hEfQpGoQw1g` / `tbl2ZLBS5Ln3QaW4T`). Behaviour worth knowing:
