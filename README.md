@@ -35,6 +35,21 @@ Swapping transports (Zapier catch hook, Cloudflare Worker proxy) is a two-line
 change there. No Airtable token is used or stored client-side — the webhook URL
 is write-only into the automation.
 
+### Why the body is form-encoded
+
+The endpoint accepts **only** `application/json` or
+`application/x-www-form-urlencoded`, and rejects anything else with
+`BAD_REQUEST` before the automation trigger ever fires.
+
+Of those two, only form encoding is on the CORS safelist. `application/json`
+would force a preflight, and the endpoint sends no CORS headers, so the
+preflight fails and the real request is never sent. That means the payload
+goes as `URLSearchParams` — which sets the right content type automatically.
+Setting the header by hand would be stripped under `no-cors`.
+
+Everything arrives as a string, including `smsConsent=true`; Airtable coerces
+it into the checkbox correctly.
+
 ### Why `INTAKE_OPAQUE`
 
 Airtable's webhook endpoint sends no CORS headers. A normal cross-origin
