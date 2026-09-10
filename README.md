@@ -23,17 +23,17 @@ bundle untouched, verifying the round-trip before it writes.
 
 ## Intake submissions
 
-The questionnaire posts to an Airtable automation webhook, configured in one
-place at the top of `src/app.jsx`:
+The questionnaire posts to the Cloudflare Worker in `workers/`, which forwards
+to the Airtable automation webhook. Configured in one place at the top of
+`src/app.jsx`:
 
 ```js
-const INTAKE_ENDPOINT = "https://hooks.airtable.com/workflows/v1/genericWebhook/...";
-const INTAKE_OPAQUE  = true;
+const INTAKE_ENDPOINT = "https://momager-intake-relay.learnbuildmaintain.workers.dev/";
+const INTAKE_OPAQUE  = false;
 ```
 
-Swapping transports (Zapier catch hook, Cloudflare Worker proxy) is a two-line
-change there. No Airtable token is used or stored client-side — the webhook URL
-is write-only into the automation.
+No Airtable token is used or stored anywhere — not in the site, not in the
+Worker. Both only ever talk to the write-only webhook URL.
 
 ### Why the body is form-encoded
 
@@ -50,22 +50,27 @@ Setting the header by hand would be stripped under `no-cors`.
 Everything arrives as a string, including `smsConsent=true`; Airtable coerces
 it into the checkbox correctly.
 
-### Why `INTAKE_OPAQUE`
+### Why the relay exists
 
-Airtable's webhook endpoint sends no CORS headers. A normal cross-origin
-`fetch` to it still **delivers** the POST — the browser only refuses to let
-JavaScript read the reply, surfacing as `TypeError: Failed to fetch`.
+Airtable's webhook sends no CORS headers, so a browser can post to it but can
+never read the reply. Every failure then looks exactly like success. That is
+not theoretical: a content-type rejection silently dropped two live
+submissions, and the site showed those leads a success screen.
 
-Treating that as a failure is actively harmful here: the retry queue would
-re-send a record that was already created, duplicating it on every subsequent
-page load, forever. `mode: "no-cors"` makes the request resolve instead, so a
-rejection once again means only one thing — the request never left the device,
-which is the case the queue exists for.
+Posting through the Worker instead means real status codes come back. A
+rejected payload is a rejection, an unreachable upstream is a 502, and the
+retry queue can be trusted — so `INTAKE_OPAQUE` is `false`.
 
-The trade-off is that server-side errors are invisible; an opaque response
-reports `status 0` whether the endpoint returned 200 or 500. If delivery
-confirmation is needed, move to a transport that sends CORS headers (Zapier
-catch hook or a Cloudflare Worker) and set `INTAKE_OPAQUE = false`.
+Leave `INTAKE_OPAQUE` as `true` only for an endpoint that sends no CORS
+headers at all, where `mode: "no-cors"` is the lesser evil: it at least stops
+the browser reporting delivered requests as failures, which would re-queue
+already-created records and duplicate them on every page load.
+
+The Worker holds no secrets and is origin-locked to momager.lbm.systems. That
+lock stops casual browser abuse but is not a security boundary — any
+non-browser client can spoof `Origin`. Worst case is junk rows in `Intake`,
+never data exposure. **If the site is ever served from another domain, add it
+to `ALLOWED_ORIGINS` in the Worker or submissions will 403.**
 
 Submissions land in the `Intake` table of the `Leads` base
 (`appYE8hEfQpGoQw1g` / `tbl2ZLBS5Ln3QaW4T`). Behaviour worth knowing:
