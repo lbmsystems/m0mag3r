@@ -5,14 +5,13 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 // Single point of configuration. Swapping transports (Airtable webhook ->
 // Zapier catch hook -> Cloudflare Worker) is a two-line change here.
-const INTAKE_ENDPOINT = "https://hooks.airtable.com/workflows/v1/genericWebhook/appYE8hEfQpGoQw1g/wflcIHEDo24Z7aRuq/wtrnH7kUuVyGY6xEc";
+const INTAKE_ENDPOINT = "https://momager-intake-relay.learnbuildmaintain.workers.dev/";
 
-// The Airtable webhook sends no CORS headers. Without no-cors the browser
-// still DELIVERS the POST but reports it to us as a failure, which would
-// re-queue an already-created record and duplicate it on every page load.
-// Set this false when moving to a transport that does send CORS headers, to
-// get real delivery confirmation back.
-const INTAKE_OPAQUE = true;
+// True only for an endpoint that sends no CORS headers, where the response
+// must be read as opaque and every failure looks like success. The relay
+// sends them, so real status codes come back: a rejected payload is a
+// rejection, and the retry queue can be trusted again. See workers/.
+const INTAKE_OPAQUE = false;
 
 // Path id -> the values written to Airtable. `supportType` is load-bearing:
 // the welcome-email automation keys off it, so no path may leave it blank.
