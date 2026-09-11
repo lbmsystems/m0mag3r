@@ -725,7 +725,9 @@ function ResultStep({ path, onSubmit, answers, openedAt }) {
 
 function ContactStep({ onSubmit, textMode, path, answers, recommendation, openedAt }) {
   const [name, setName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [trap, setTrap] = useState(""); // honeypot - real users never fill this
   const [phoneError, setPhoneError] = useState("");
@@ -753,8 +755,9 @@ function ContactStep({ onSubmit, textMode, path, answers, recommendation, opened
     const meta = PATH_META[path] || PATH_META.__text;
     await submitIntake({
       firstName: name.trim(),
+      lastName: lastName.trim(),
       phone: e164,
-      email: "",
+      email: email.trim(),
       path: meta.path,
       supportType: meta.supportType,
       inTheirWords: note.trim(),
@@ -781,8 +784,10 @@ function ContactStep({ onSubmit, textMode, path, answers, recommendation, opened
       </>}
       <form className="form" onSubmit={handleSubmit}>
         <label>First name <input value={name} onChange={(e)=>setName(e.target.value)} placeholder="e.g. Maya" required/></label>
+        <label>Last name <span style={{opacity:0.6}}>(optional)</span> <input value={lastName} onChange={(e)=>setLastName(e.target.value)} placeholder="e.g. Okafor" autoComplete="family-name"/></label>
         <label>Mobile number <input value={phone} onChange={(e)=>{setPhone(e.target.value); if (phoneError) setPhoneError("");}} type="tel" placeholder="(703) 555-0401" required/></label>
         {phoneError && <p role="alert" style={{color:"#c0392b", fontSize:13, lineHeight:1.4, marginTop:-4}}>{phoneError}</p>}
+        <label>Email address{textMode && <span style={{opacity:0.6}}> (optional)</span>} <input value={email} onChange={(e)=>setEmail(e.target.value)} type="email" placeholder="you@example.com" autoComplete="email" required={!textMode}/></label>
         <label>Tell us about you and how we can help<textarea rows="3" value={note} onChange={(e)=>setNote(e.target.value)} placeholder="The more detailed the better." required/></label>
         <div aria-hidden="true" style={{position:"absolute", left:"-9999px", width:1, height:1, overflow:"hidden"}}>
           <label>Company
